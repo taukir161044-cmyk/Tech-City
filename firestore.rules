@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    // lib/common.dart এর kAdminEmail এর সাথে একই ইমেইল থাকতে হবে
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'fahadtaukir4@gmail.com';
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // সেটিংস: সবাই পড়তে পারবে (সাইন আপ ফর্মে জোন/প্যাকেজ লিস্ট লাগে), লিখবে শুধু অ্যাডমিন
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+        && request.resource.data.points == 0
+        && request.resource.data.keys().hasOnly([
+          'name', 'phone', 'email', 'address', 'zone', 'packageName',
+          'referralCode', 'referredBy', 'points', 'createdAt', 'notifSeenAt'
+        ]);
+      allow update: if isAdmin()
+        || (isOwner(uid) && (
+          // নিজের প্রোফাইল এডিট
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'phone', 'address', 'zone', 'notifSeenAt'])
+          // রিডিমের সময় শুধু পয়েন্ট কমানো যাবে, বাড়ানো যাবে না
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points'])
+              && request.resource.data.points < resource.data.points
+              && request.resource.data.points >= 0)
+        ));
+      allow delete: if isAdmin();
+    }
+
+    // রেফারেল কোড → ইউজার ম্যাপ। কোড জানা থাকলে যে কেউ যাচাই করতে পারবে, লিস্ট দেখতে পারবে শুধু অ্যাডমিন
+    match /referralCodes/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /referrals/{id} {
+      allow read: if isAdmin()
+        || (signedIn() && (resource.data.referrerUid == request.auth.uid
+                           || resource.data.referredUid == request.auth.uid));
+      allow create: if signedIn()
+        && id == request.auth.uid
+        && request.resource.data.referredUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    match /leaderboard/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /awards/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /banners/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /tickets/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'Processing';
+      allow update, delete: if isAdmin();
+    }
+
+    match /requests/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    match /redeems/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+  }
+}
