@@ -24,6 +24,14 @@ jobs:
           channel: stable
           cache: true
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('.github/workflows/build-apk.yml') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       # android ফোল্ডার ইত্যাদি CI তেই বানানো হয়, রিপোতে শুধু আপনার lib/ থাকে
       - name: Create Flutter project and add packages
         run: |
@@ -64,13 +72,21 @@ jobs:
             echo "::warning::gradle.kts ফাইলে প্লাগইন বসানো যায়নি, পুশ কাজ নাও করতে পারে"
           fi
 
+      # Gradle ডাউনলোডে GitHub মাঝে মাঝে 504 দেয়, তাই চেষ্টা আবার করা হয়
       - name: Build release APK
         working-directory: build_app
-        run: >
-          flutter build apk --release
-          --build-number=${{ github.run_number }}
-          --build-name=1.0.${{ github.run_number }}
-          --dart-define=BUILD_NUMBER=${{ github.run_number }}
+        run: |
+          for i in 1 2 3 4; do
+            if flutter build apk --release \
+                --build-number=${{ github.run_number }} \
+                --build-name=1.0.${{ github.run_number }} \
+                --dart-define=BUILD_NUMBER=${{ github.run_number }}; then
+              exit 0
+            fi
+            echo "::warning::বিল্ড ব্যর্থ হলো (চেষ্টা $i), ৪৫ সেকেন্ড পরে আবার চেষ্টা"
+            sleep 45
+          done
+          exit 1
 
       # প্রতিবার একই চাবি (keystore) দিয়ে সাইন না করলে ফোনে আপডেট ইনস্টল হয় না
       - name: Sign APK with fixed key
