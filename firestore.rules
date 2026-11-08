@@ -86,7 +86,17 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'Processing';
-      allow update, delete: if isAdmin();
+      // সমাধান হওয়ার পর ইউজার একবার রেটিং দিতে পারবে
+      allow update: if isAdmin()
+        || (isOwner(resource.data.uid)
+            && resource.data.status == 'Resolved'
+            && !('rating' in resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['rating', 'feedback', 'ratedAt'])
+            && request.resource.data.rating is int
+            && request.resource.data.rating >= 1
+            && request.resource.data.rating <= 5);
+      allow delete: if isAdmin();
     }
 
     match /requests/{id} {
@@ -94,6 +104,29 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'pending';
+      allow update, delete: if isAdmin();
+    }
+
+    match /outages/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /shortcuts/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // NPS: ডকুমেন্ট আইডি = মাস_ইউজারUID, মাসে একবার জমা দেওয়া যায়, বদলানো যায় না
+    match /nps/{id} {
+      allow read: if isAdmin()
+        || (signedIn() && (resource == null || resource.data.uid == request.auth.uid));
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && id == request.resource.data.month + '_' + request.auth.uid
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 10;
       allow update, delete: if isAdmin();
     }
 

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'common.dart';
+import 'extras_admin.dart';
 
 // =============================================================== home
 
@@ -71,6 +72,20 @@ class AdminHome extends StatelessWidget {
                   db.collection('redeems').where('status', isEqualTo: 'pending')),
           const AdminTile(
               icon: Icons.people, label: 'ইউজার লিস্ট', page: AdminUsersPage()),
+          const AdminTile(
+              icon: Icons.warning_amber,
+              label: 'আউটেজ অ্যালার্ট',
+              page: AdminOutagesPage()),
+          const AdminTile(
+              icon: Icons.apps,
+              label: 'FTP / TV শর্টকাট',
+              page: AdminShortcutsPage()),
+          const AdminTile(
+              icon: Icons.star_rate,
+              label: 'টেকনিশিয়ান রেটিং',
+              page: AdminRatingsPage()),
+          const AdminTile(
+              icon: Icons.poll, label: 'NPS সার্ভে', page: AdminNpsPage()),
           const AdminTile(
               icon: Icons.settings, label: 'সেটিংস', page: AdminSettingsPage()),
         ],
@@ -1397,6 +1412,9 @@ class _UserEditForm extends StatefulWidget {
 
 class _UserEditFormState extends State<_UserEditForm> {
   final _adj = TextEditingController();
+  late final _due =
+      TextEditingController(text: '${asInt(widget.d.data()['dueDay'])}');
+  late bool _paid = asStr(widget.d.data()['paidMonth']) == monthKey();
   late String _zone = asStr(widget.d.data()['zone']);
   late String _pkg = asStr(widget.d.data()['packageName']);
   String? _err;
@@ -1405,6 +1423,7 @@ class _UserEditFormState extends State<_UserEditForm> {
   @override
   void dispose() {
     _adj.dispose();
+    _due.dispose();
     super.dispose();
   }
 
@@ -1416,7 +1435,12 @@ class _UserEditFormState extends State<_UserEditForm> {
     });
     final nav = Navigator.of(context);
     try {
-      final data = <Object, Object?>{'zone': _zone, 'packageName': _pkg};
+      final data = <Object, Object?>{
+        'zone': _zone,
+        'packageName': _pkg,
+        'dueDay': clampInt(int.tryParse(_due.text.trim()) ?? 0, 0, 28),
+        'paidMonth': _paid ? monthKey() : '',
+      };
       if (adj != 0) data['points'] = FieldValue.increment(adj);
       await widget.d.reference.update(data);
       nav.pop();
@@ -1477,6 +1501,20 @@ class _UserEditFormState extends State<_UserEditForm> {
           decoration: deco('পয়েন্ট যোগ / বিয়োগ',
               hint: 'যেমন: 50 অথবা -20 (খালি রাখলে বদলাবে না)'),
         ),
+        gap,
+        TextField(
+          controller: _due,
+          keyboardType: TextInputType.number,
+          decoration: deco('এই ইউজারের বিলের তারিখ (১–২৮)',
+              hint: '0 = সেটিংসের সাধারণ তারিখ'),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('এই মাসের বিল পরিশোধিত'),
+          subtitle: const Text('চালু থাকলে এই ইউজার বিল রিমাইন্ডার দেখবে না'),
+          value: _paid,
+          onChanged: (v) => setState(() => _paid = v),
+        ),
       ],
     );
   }
@@ -1499,11 +1537,32 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
   late final _phone = TextEditingController(text: _s.supportPhone);
   late final _zones = TextEditingController(text: _s.zones.join('\n'));
   late final _pkgs = TextEditingController(text: _s.packages.join('\n'));
+  late final _billDay = TextEditingController(text: '${_s.billDueDay}');
+  late final _billMsg = TextEditingController(text: _s.billMessage);
+  late final _testHost = TextEditingController(text: _s.testHost);
+  late final _testPort = TextEditingController(text: '${_s.testPort}');
+  late final _steps =
+      TextEditingController(text: _s.troubleshootSteps.join('\n'));
+  late final _npsQ = TextEditingController(text: _s.npsQuestion);
+  late bool _npsOn = _s.npsEnabled;
   bool _busy = false;
 
   @override
   void dispose() {
-    for (final c in [_perTaka, _refPts, _minRedeem, _phone, _zones, _pkgs]) {
+    for (final c in [
+      _perTaka,
+      _refPts,
+      _minRedeem,
+      _phone,
+      _zones,
+      _pkgs,
+      _billDay,
+      _billMsg,
+      _testHost,
+      _testPort,
+      _steps,
+      _npsQ
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -1520,7 +1579,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     final zones = _lines(_zones);
     final pkgs = _lines(_pkgs);
     if (perTaka < 1 || zones.isEmpty || pkgs.isEmpty) {
-      toast(context, 'পয়েন্ট রেট ১ বা তার বেশি দিন এবং জোন ও প্যাকেজ লিস্ট খালি রাখবেন না');
+      toast(context,
+          'পয়েন্ট রেট ১ বা তার বেশি দিন এবং জোন ও প্যাকেজ লিস্ট খালি রাখবেন না');
       return;
     }
     setState(() => _busy = true);
@@ -1532,6 +1592,13 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
         'supportPhone': _phone.text.trim(),
         'zones': zones,
         'packages': pkgs,
+        'billDueDay': clampInt(int.tryParse(_billDay.text.trim()) ?? 0, 0, 28),
+        'billMessage': _billMsg.text.trim(),
+        'testHost': _testHost.text.trim(),
+        'testPort': clampInt(int.tryParse(_testPort.text.trim()) ?? 80, 1, 65535),
+        'troubleshootSteps': _lines(_steps),
+        'npsEnabled': _npsOn,
+        'npsQuestion': _npsQ.text.trim(),
       }, SetOptions(merge: true));
       if (mounted) toast(context, 'সেটিংস সেভ হয়েছে');
     });
@@ -1545,6 +1612,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const SectionTitle('পয়েন্ট ও রিওয়ার্ড'),
           TextField(
               controller: _perTaka,
               keyboardType: TextInputType.number,
@@ -1564,7 +1632,46 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               controller: _phone,
               keyboardType: TextInputType.phone,
               decoration: deco('সাপোর্ট ফোন নম্বর')),
+          const SectionTitle('বিল রিমাইন্ডার'),
+          TextField(
+              controller: _billDay,
+              keyboardType: TextInputType.number,
+              decoration: deco('প্রতি মাসের বিলের তারিখ (১–২৮)',
+                  hint: '0 = রিমাইন্ডার বন্ধ')),
           gap,
+          TextField(
+              controller: _billMsg,
+              maxLines: 2,
+              decoration: deco('রিমাইন্ডারের মেসেজ')),
+          const SectionTitle('Check My Line'),
+          TextField(
+              controller: _testHost,
+              keyboardType: TextInputType.url,
+              decoration: deco('টেস্ট সার্ভার (আপনার লোকাল সার্ভারের IP বা নাম)',
+                  hint: 'খালি রাখলে শুধু ফোনের ইন্টারনেট টেস্ট হবে')),
+          gap,
+          TextField(
+              controller: _testPort,
+              keyboardType: TextInputType.number,
+              decoration: deco('টেস্ট পোর্ট (সাধারণত 80)')),
+          gap,
+          TextField(
+              controller: _steps,
+              maxLines: 6,
+              decoration:
+                  deco('সমাধানের ধাপ (প্রতি লাইনে একটা)')),
+          const SectionTitle('NPS সার্ভে'),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('মাসে একবার NPS প্রশ্ন দেখাবে'),
+            value: _npsOn,
+            onChanged: (v) => setState(() => _npsOn = v),
+          ),
+          TextField(
+              controller: _npsQ,
+              maxLines: 2,
+              decoration: deco('NPS প্রশ্ন')),
+          const SectionTitle('জোন ও প্যাকেজ'),
           TextField(
               controller: _zones,
               maxLines: 5,
@@ -1579,6 +1686,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
             onPressed: _busy ? null : _save,
             child: Text(_busy ? 'অপেক্ষা করুন...' : 'সেভ করুন'),
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );

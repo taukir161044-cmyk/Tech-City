@@ -40,6 +40,12 @@ jobs:
           sed -i -E 's/(minSdk(Version)?)( =)? ?flutter\.minSdkVersion/\1\3 23/' build_app/android/app/build.gradle*
           grep -n "minSdk" build_app/android/app/build.gradle*
 
+      - name: Add INTERNET permission
+        run: |
+          MF=build_app/android/app/src/main/AndroidManifest.xml
+          grep -q "android.permission.INTERNET" "$MF" || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$MF"
+          grep -n "INTERNET" "$MF"
+
       - name: Build release APK
         working-directory: build_app
         run: flutter build apk --release

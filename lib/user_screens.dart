@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'common.dart';
+import 'extras_user.dart';
 
 // ======================================================== root & shell
 
@@ -167,9 +168,13 @@ class HomeTab extends StatelessWidget {
         const SizedBox(height: 4),
         Text('${me.packageName}  •  ${me.zone}',
             style: TextStyle(color: Colors.grey.shade700)),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        NetStatusCard(me: me),
+        OutageBanners(zone: me.zone),
+        BillReminderCard(me: me),
         const BannerCarousel(),
         const SizedBox(height: 16),
+        const ShortcutsGrid(),
         WalletCard(me: me),
         const SizedBox(height: 16),
         ReferralCard(me: me),
@@ -192,6 +197,8 @@ class HomeTab extends StatelessWidget {
                 onTap: () => goTab(1)),
           ],
         ),
+        const SizedBox(height: 16),
+        NpsCard(me: me),
       ],
     );
   }
@@ -747,7 +754,7 @@ class ServiceTab extends StatelessWidget {
                   builder: (c, docs) => ListView.builder(
                     padding: const EdgeInsets.all(12),
                     itemCount: docs.length,
-                    itemBuilder: (c, i) => _TicketCard(m: docs[i].data()),
+                    itemBuilder: (c, i) => _TicketCard(d: docs[i]),
                   ),
                 ),
                 QueryList(
@@ -771,8 +778,9 @@ class ServiceTab extends StatelessWidget {
 }
 
 class _TicketCard extends StatelessWidget {
-  const _TicketCard({required this.m});
-  final Json m;
+  const _TicketCard({required this.d});
+  final Snap d;
+  Json get m => d.data();
 
   @override
   Widget build(BuildContext context) {
@@ -802,6 +810,7 @@ class _TicketCard extends StatelessWidget {
                   style: TextStyle(color: Colors.grey.shade700)),
             const SizedBox(height: 10),
             TicketSteps(status),
+            TicketRatingBox(d: d),
             if (status == 'Technician Assigned' && tech.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),

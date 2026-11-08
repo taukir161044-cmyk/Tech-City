@@ -187,6 +187,13 @@ class AppSettings {
     required this.zones,
     required this.packages,
     required this.supportPhone,
+    required this.billDueDay,
+    required this.billMessage,
+    required this.testHost,
+    required this.testPort,
+    required this.troubleshootSteps,
+    required this.npsEnabled,
+    required this.npsQuestion,
   });
 
   final int pointsPerTaka;
@@ -195,6 +202,13 @@ class AppSettings {
   final List<String> zones;
   final List<String> packages;
   final String supportPhone;
+  final int billDueDay;
+  final String billMessage;
+  final String testHost;
+  final int testPort;
+  final List<String> troubleshootSteps;
+  final bool npsEnabled;
+  final String npsQuestion;
 
   static const defaults = AppSettings(
     pointsPerTaka: 10,
@@ -203,11 +217,28 @@ class AppSettings {
     zones: ['Zone A', 'Zone B', 'Zone C'],
     packages: ['5 Mbps', '10 Mbps', '20 Mbps', '30 Mbps'],
     supportPhone: '',
+    billDueDay: 0,
+    billMessage:
+        'আপনার এই মাসের বিল পরিশোধের সময় এসে গেছে। বিকাশ বা নগদ দিয়ে পে করে দিন।',
+    testHost: '',
+    testPort: 80,
+    troubleshootSteps: [
+      'রাউটারের পাওয়ার ক্যাবল খুলে ৩০ সেকেন্ড অপেক্ষা করুন, তারপর আবার লাগান।',
+      'রাউটারের WAN / ইন্টারনেট পোর্টের ক্যাবল ঠিকমতো লাগানো আছে কিনা দেখুন।',
+      'ক্যাবল বাঁকা, কাটা বা ঢিলা কিনা দেখুন।',
+      'রাউটারের PON / LOS লাইট লাল জ্বললে সরাসরি আমাদের জানান।',
+      'কিছুক্ষণ পরেও ঠিক না হলে কমপ্লেইন করুন।',
+    ],
+    npsEnabled: true,
+    npsQuestion:
+        'আপনি Tech City ইন্টারনেট সার্ভিস অন্যদের কাছে কতটা সুপারিশ করবেন?',
   );
 
   factory AppSettings.fromMap(Json? m) {
     const d = AppSettings.defaults;
     if (m == null) return d;
+    final msg = asStr(m['billMessage']).trim();
+    final q = asStr(m['npsQuestion']).trim();
     return AppSettings(
       pointsPerTaka: max(1, asInt(m['pointsPerTaka'], d.pointsPerTaka)),
       referralPoints: max(0, asInt(m['referralPoints'], d.referralPoints)),
@@ -215,6 +246,13 @@ class AppSettings {
       zones: asStrList(m['zones'], d.zones),
       packages: asStrList(m['packages'], d.packages),
       supportPhone: asStr(m['supportPhone']),
+      billDueDay: min(28, max(0, asInt(m['billDueDay'], 0))),
+      billMessage: msg.isEmpty ? d.billMessage : msg,
+      testHost: asStr(m['testHost']).trim(),
+      testPort: min(65535, max(1, asInt(m['testPort'], 80))),
+      troubleshootSteps: asStrList(m['troubleshootSteps'], d.troubleshootSteps),
+      npsEnabled: m['npsEnabled'] != false,
+      npsQuestion: q.isEmpty ? d.npsQuestion : q,
     );
   }
 }
@@ -250,10 +288,13 @@ class AppUser {
     required this.referralCode,
     required this.points,
     required this.notifSeenAt,
+    required this.dueDay,
+    required this.paidMonth,
   });
 
   final String uid, name, phone, email, address, zone, packageName, referralCode;
-  final int points;
+  final int points, dueDay;
+  final String paidMonth;
   final Timestamp? notifSeenAt;
 
   factory AppUser.fromDoc(DocumentSnapshot<Json> d) {
@@ -270,6 +311,8 @@ class AppUser {
       referralCode: asStr(m['referralCode']),
       points: asInt(m['points']),
       notifSeenAt: seen is Timestamp ? seen : null,
+      dueDay: asInt(m['dueDay']),
+      paidMonth: asStr(m['paidMonth']),
     );
   }
 }
@@ -590,3 +633,51 @@ class _QueryListState extends State<QueryList> {
     );
   }
 }
+
+// ------------------------------------------------------ extras (v2 features)
+
+const String kAllLabel = 'সব এলাকা';
+
+const List<IconData> kShortcutIcons = [
+  Icons.movie,
+  Icons.live_tv,
+  Icons.folder_open,
+  Icons.download,
+  Icons.sports_esports,
+  Icons.public,
+  Icons.music_note,
+  Icons.link,
+];
+
+int clampInt(int v, int lo, int hi) => v < lo ? lo : (v > hi ? hi : v);
+
+/// পরবর্তী বিলের তারিখ। dueDay (১–২৮) না থাকলে null।
+DateTime? nextDueDate(int dueDay, [DateTime? now]) {
+  if (dueDay < 1) return null;
+  final n = now ?? DateTime.now();
+  final today = DateTime(n.year, n.month, n.day);
+  var d = DateTime(n.year, n.month, dueDay);
+  if (d.isBefore(today)) d = DateTime(n.year, n.month + 1, dueDay);
+  return d;
+}
+
+Future<void> launchLink(BuildContext c, String url) async {
+  var u = url.trim();
+  if (u.isEmpty) return;
+  if (!u.contains('://')) u = 'http://$u';
+  try {
+    final ok = await launchUrl(Uri.parse(u), mode: LaunchMode.externalApplication);
+    if (!ok && c.mounted) toast(c, 'লিংক খোলা যায়নি');
+  } catch (_) {
+    if (c.mounted) toast(c, 'লিংক খোলা যায়নি');
+  }
+}
+
+Widget starRow(num n, {double size = 18}) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= 5; i++)
+          Icon(i <= n.round() ? Icons.star : Icons.star_border,
+              size: size, color: Colors.amber.shade700),
+      ],
+    );
