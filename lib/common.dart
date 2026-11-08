@@ -14,6 +14,8 @@ const String kAppName = 'Tech City';
 const int kBuildNumber = int.fromEnvironment('BUILD_NUMBER', defaultValue: 0);
 
 /// প্রতি বিল্ডে GitHub Releases এ এই লিংকে সর্বশেষ APK থাকে
+const String kRepo = 'taukir161044-cmyk/Tech-City';
+
 const String kDefaultApkUrl =
     'https://github.com/taukir161044-cmyk/Tech-City/releases/latest/download/tech-city.apk';
 

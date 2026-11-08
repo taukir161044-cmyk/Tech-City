@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io' show InternetAddress, Socket;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
 import 'common.dart';
@@ -858,4 +859,21 @@ class _UpdateCardState extends State<UpdateCard> {
       },
     );
   }
+}
+
+// ========================================================= push register
+
+/// অনুমতি চেয়ে ডিভাইস টোকেন ইউজারের ডকুমেন্টে সেভ করে (পুশ পাঠানোর জন্য)
+Future<void> registerPush(String uid) async {
+  try {
+    final m = FirebaseMessaging.instance;
+    await m.requestPermission();
+    final t = await m.getToken();
+    if (t != null) {
+      await db.collection('users').doc(uid).update({'fcmToken': t});
+    }
+    m.onTokenRefresh.listen((nt) {
+      db.collection('users').doc(uid).update({'fcmToken': nt}).catchError((_) {});
+    });
+  } catch (_) {}
 }

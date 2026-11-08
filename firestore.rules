@@ -33,7 +33,7 @@ service cloud.firestore {
         || (isOwner(uid) && (
           // নিজের প্রোফাইল এডিট
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'phone', 'address', 'zone', 'notifSeenAt'])
+            .hasOnly(['name', 'phone', 'address', 'zone', 'notifSeenAt', 'fcmToken'])
           // রিডিমের সময় শুধু পয়েন্ট কমানো যাবে, বাড়ানো যাবে না
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points'])
               && request.resource.data.points < resource.data.points
@@ -105,6 +105,11 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'pending';
       allow update, delete: if isAdmin();
+    }
+
+    // অ্যাডমিনের গোপন সেটিংস (যেমন GitHub টোকেন) — শুধু অ্যাডমিন পড়তে/লিখতে পারবে
+    match /adminPrivate/{id} {
+      allow read, write: if isAdmin();
     }
 
     match /outages/{id} {

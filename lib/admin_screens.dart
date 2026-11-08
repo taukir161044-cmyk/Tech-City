@@ -870,8 +870,10 @@ class _AdminNotifyPageState extends State<AdminNotifyPage> {
         'title': _title.text.trim(),
         'body': _body.text.trim(),
         'target': _target == _all ? 'all' : _target,
+        'pushed': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
+      triggerPush();
       _title.clear();
       _body.clear();
       if (mounted) toast(context, 'নোটিফিকেশন পাঠানো হয়েছে');
@@ -1069,6 +1071,7 @@ class _AdminLeaderboardPageState extends State<AdminLeaderboardPage> {
           'body':
               '${monthLabel(_month)} মাসে $count জনকে রেফার করে আপনি ${i + 1} নম্বর হয়েছেন।${gift.isEmpty ? '' : '\nআপনার গিফট: $gift'}',
           'target': 'uid:${asStr(top[i]['uid'])}',
+          'pushed': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -1080,6 +1083,7 @@ class _AdminLeaderboardPageState extends State<AdminLeaderboardPage> {
         'finalizedAt': FieldValue.serverTimestamp(),
       });
       await b.commit();
+      triggerPush();
       await _load();
       if (mounted) toast(context, 'ফাইনাল হয়েছে, বিজয়ীদের নোটিফিকেশন গেছে');
     });
@@ -1685,6 +1689,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               controller: _pkgs,
               maxLines: 5,
               decoration: deco('প্যাকেজ লিস্ট (প্রতি লাইনে একটা)')),
+          const GithubTokenBox(),
           gap,
           FilledButton(
             onPressed: _busy ? null : _save,

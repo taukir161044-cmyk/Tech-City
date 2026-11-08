@@ -1,4 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -148,8 +151,10 @@ class _OutageFormState extends State<_OutageForm> {
             'title': 'নেটওয়ার্ক সমস্যা',
             'body': _msg.text.trim(),
             'target': target,
+            'pushed': false,
             'createdAt': FieldValue.serverTimestamp(),
           });
+          triggerPush();
         }
       } else {
         await widget.d!.reference.update(data);
@@ -659,8 +664,10 @@ class _AdminUpdatePageState extends State<AdminUpdatePage> {
           'title': 'নতুন অ্যাপ আপডেট',
           'body': _msg.text.trim(),
           'target': 'all',
+          'pushed': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        triggerPush();
       }
       if (mounted) toast(context, 'আপডেট নোটিশ পাবলিশ হয়েছে');
     });
@@ -745,6 +752,125 @@ class _AdminUpdatePageState extends State<AdminUpdatePage> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+// ============================================================ push trigger
+
+/// GitHub টোকেন সেট থাকলে সাথে সাথে পুশ পাঠানোর workflow চালু করে।
+/// না থাকলে workflow প্রতি ৫ মিনিটে নিজে থেকে চলে (কিছু দেরি হতে পারে)।
+Future<void> triggerPush() async {
+  try {
+    final s = await db.collection('adminPrivate').doc('github').get();
+    final token = asStr(s.data()?['token']).trim();
+    if (token.isEmpty) return;
+    final client = HttpClient();
+    final req = await client.postUrl(Uri.parse(
+        'https://api.github.com/repos/$kRepo/actions/workflows/send-push.yml/dispatches'));
+    req.headers.set('Authorization', 'Bearer $token');
+    req.headers.set('Accept', 'application/vnd.github+json');
+    req.headers.set('X-GitHub-Api-Version', '2022-11-28');
+    req.headers.set('User-Agent', 'tech-city-app');
+    req.headers.contentType = ContentType.json;
+    req.write(jsonEncode({'ref': 'main'}));
+    final res = await req.close();
+    await res.drain<void>();
+    client.close();
+  } catch (_) {}
+}
+
+class GithubTokenBox extends StatefulWidget {
+  const GithubTokenBox({super.key});
+
+  @override
+  State<GithubTokenBox> createState() => _GithubTokenBoxState();
+}
+
+class _GithubTokenBoxState extends State<GithubTokenBox> {
+  final _ctrl = TextEditingController();
+  bool _has = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = await db.collection('adminPrivate').doc('github').get();
+      final has = asStr(s.data()?['token']).trim().isNotEmpty;
+      if (mounted) setState(() => _has = has);
+    } catch (_) {}
+  }
+
+  Future<void> _save(String token) async {
+    setState(() => _busy = true);
+    await guarded(context, () async {
+      await db
+          .collection('adminPrivate')
+          .doc('github')
+          .set({'token': token}, SetOptions(merge: true));
+      _ctrl.clear();
+      if (mounted) {
+        setState(() => _has = token.isNotEmpty);
+        toast(context, token.isEmpty ? 'টোকেন মুছে ফেলা হয়েছে' : 'টোকেন সেভ হয়েছে');
+      }
+    });
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle('সাথে সাথে পুশ (ঐচ্ছিক)'),
+        Text(
+          _has
+              ? 'GitHub টোকেন সেট করা আছে: নোটিফিকেশন পাঠালেই প্রায় সাথে সাথে ফোনে পুশ যাবে।'
+              : 'টোকেন নেই: পুশ প্রতি ৫ মিনিটের চেকে (কিছু দেরিতে) যাবে। সাথে সাথে পাঠাতে GitHub টোকেন দিন।',
+          style: TextStyle(color: Colors.grey.shade700),
+        ),
+        gap,
+        TextField(
+          controller: _ctrl,
+          obscureText: true,
+          decoration: deco('GitHub টোকেন পেস্ট করুন'),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            FilledButton.tonal(
+              onPressed: _busy
+                  ? null
+                  : () {
+                      final t = _ctrl.text.trim();
+                      if (t.isEmpty) {
+                        toast(context, 'আগে টোকেন পেস্ট করুন');
+                        return;
+                      }
+                      _save(t);
+                    },
+              child: const Text('টোকেন সেভ'),
+            ),
+            const SizedBox(width: 8),
+            if (_has)
+              OutlinedButton(
+                onPressed: _busy ? null : () => _save(''),
+                child: const Text('টোকেন মুছুন'),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

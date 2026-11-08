@@ -63,6 +63,12 @@ class _UserShellState extends State<UserShell> {
       notifQuery(widget.me.uid, widget.me.zone).snapshots();
 
   @override
+  void initState() {
+    super.initState();
+    registerPush(widget.me.uid);
+  }
+
+  @override
   void didUpdateWidget(covariant UserShell old) {
     super.didUpdateWidget(old);
     if (old.me.zone != widget.me.zone) {
