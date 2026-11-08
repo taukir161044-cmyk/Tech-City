@@ -87,6 +87,10 @@ class AdminHome extends StatelessWidget {
           const AdminTile(
               icon: Icons.poll, label: 'NPS সার্ভে', page: AdminNpsPage()),
           const AdminTile(
+              icon: Icons.system_update,
+              label: 'অ্যাপ আপডেট নোটিশ',
+              page: AdminUpdatePage()),
+          const AdminTile(
               icon: Icons.settings, label: 'সেটিংস', page: AdminSettingsPage()),
         ],
       ),

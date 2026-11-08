@@ -585,3 +585,166 @@ class _AdminNpsPageState extends State<AdminNpsPage> {
     );
   }
 }
+
+// ============================================================ app update
+
+class AdminUpdatePage extends StatefulWidget {
+  const AdminUpdatePage({super.key});
+
+  @override
+  State<AdminUpdatePage> createState() => _AdminUpdatePageState();
+}
+
+class _AdminUpdatePageState extends State<AdminUpdatePage> {
+  final _build = TextEditingController();
+  final _msg = TextEditingController();
+  final _url = TextEditingController(text: kDefaultApkUrl);
+  bool _force = false;
+  bool _notify = true;
+  bool _loading = true;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _build.dispose();
+    _msg.dispose();
+    _url.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = await db.collection('settings').doc('app').get();
+      final m = s.data();
+      if (m != null) {
+        _build.text = '${asInt(m['latestBuild'])}';
+        _msg.text = asStr(m['message']);
+        final u = asStr(m['url']).trim();
+        if (u.isNotEmpty) _url.text = u;
+        _force = m['force'] == true;
+      }
+    } catch (_) {}
+    if (_build.text.isEmpty || _build.text == '0') {
+      _build.text = kBuildNumber > 0 ? '$kBuildNumber' : '';
+    }
+    if (_msg.text.isEmpty) {
+      _msg.text = 'অ্যাপের নতুন ভার্সন এসেছে। আপডেট করে নিন।';
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _publish() async {
+    final b = int.tryParse(_build.text.trim()) ?? 0;
+    if (b < 1) {
+      toast(context, 'বিল্ড নম্বর দিন');
+      return;
+    }
+    setState(() => _busy = true);
+    await guarded(context, () async {
+      await db.collection('settings').doc('app').set({
+        'latestBuild': b,
+        'message': _msg.text.trim(),
+        'url': _url.text.trim(),
+        'force': _force,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (_notify) {
+        await db.collection('notifications').add({
+          'title': 'নতুন অ্যাপ আপডেট',
+          'body': _msg.text.trim(),
+          'target': 'all',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      if (mounted) toast(context, 'আপডেট নোটিশ পাবলিশ হয়েছে');
+    });
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _clear() async {
+    setState(() => _busy = true);
+    await guarded(context, () async {
+      await db.collection('settings').doc('app').set({
+        'latestBuild': 0,
+        'force': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      _force = false;
+      _build.text = '0';
+      if (mounted) toast(context, 'আপডেট নোটিশ বন্ধ করা হয়েছে');
+    });
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('অ্যাপ আপডেট নোটিশ')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                        'এই ফোনের অ্যাপের বিল্ড নম্বর: ${kBuildNumber == 0 ? 'অজানা' : kBuildNumber}\n\n'
+                        'নিয়ম: GitHub এ নতুন বিল্ড শেষ হলে সেই APK নিজের ফোনে ইনস্টল করুন, তারপর এই পেজ খুলুন। বিল্ড নম্বর নিজে থেকে বসে যাবে, শুধু পাবলিশ চাপুন। '
+                        'যাদের অ্যাপের বিল্ড নম্বর এর চেয়ে ছোট, তারা আপডেট কার্ড দেখবে।'),
+                  ),
+                ),
+                gap,
+                TextField(
+                  controller: _build,
+                  keyboardType: TextInputType.number,
+                  decoration: deco('সর্বশেষ বিল্ড নম্বর'),
+                ),
+                gap,
+                TextField(
+                  controller: _msg,
+                  maxLines: 3,
+                  decoration: deco('ইউজারদের মেসেজ (কী নতুন হলো)'),
+                ),
+                gap,
+                TextField(
+                  controller: _url,
+                  keyboardType: TextInputType.url,
+                  decoration: deco('APK ডাউনলোড লিংক'),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('বাধ্যতামূলক আপডেট'),
+                  subtitle: const Text('চালু করলে পুরনো অ্যাপ আপডেট ছাড়া চলবে না'),
+                  value: _force,
+                  onChanged: (v) => setState(() => _force = v),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('নোটিফিকেশন ট্যাবেও পাঠান'),
+                  value: _notify,
+                  onChanged: (v) => setState(() => _notify = v ?? false),
+                ),
+                gap,
+                FilledButton.icon(
+                  onPressed: _busy ? null : _publish,
+                  icon: const Icon(Icons.system_update),
+                  label: const Text('আপডেট নোটিশ পাবলিশ করুন'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _busy ? null : _clear,
+                  child: const Text('নোটিশ বন্ধ করুন'),
+                ),
+              ],
+            ),
+    );
+  }
+}

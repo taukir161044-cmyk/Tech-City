@@ -43,7 +43,7 @@ class _UserRootState extends State<UserRoot> {
             ),
           );
         }
-        return UserShell(me: AppUser.fromDoc(snap.data!));
+        return UpdateGuard(child: UserShell(me: AppUser.fromDoc(snap.data!)));
       },
     );
   }
@@ -169,6 +169,7 @@ class HomeTab extends StatelessWidget {
         Text('${me.packageName}  •  ${me.zone}',
             style: TextStyle(color: Colors.grey.shade700)),
         const SizedBox(height: 12),
+        const UpdateCard(),
         NetStatusCard(me: me),
         OutageBanners(zone: me.zone),
         BillReminderCard(me: me),

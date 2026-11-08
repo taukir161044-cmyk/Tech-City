@@ -10,6 +10,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 const String kAppName = 'Tech City';
 
+/// GitHub Actions বিল্ডের সময় --dart-define=BUILD_NUMBER দিয়ে বসে (রান নম্বর)
+const int kBuildNumber = int.fromEnvironment('BUILD_NUMBER', defaultValue: 0);
+
+/// প্রতি বিল্ডে GitHub Releases এ এই লিংকে সর্বশেষ APK থাকে
+const String kDefaultApkUrl =
+    'https://github.com/taukir161044-cmyk/Tech-City/releases/latest/download/tech-city.apk';
+
 /// এই ইমেইল দিয়ে লগইন করলেই অ্যাডমিন প্যানেল খুলবে।
 /// firestore.rules ফাইলেও একই ইমেইল আছে — বদলাতে হলে দুই জায়গাতেই বদলান।
 const String kAdminEmail = 'fahadtaukir4@gmail.com';

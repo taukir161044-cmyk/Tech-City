@@ -5,6 +5,9 @@ on:
   push:
     branches: [main, master]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -48,9 +51,45 @@ jobs:
 
       - name: Build release APK
         working-directory: build_app
-        run: flutter build apk --release
+        run: >
+          flutter build apk --release
+          --build-number=${{ github.run_number }}
+          --build-name=1.0.${{ github.run_number }}
+          --dart-define=BUILD_NUMBER=${{ github.run_number }}
+
+      # প্রতিবার একই চাবি (keystore) দিয়ে সাইন না করলে ফোনে আপডেট ইনস্টল হয় না
+      - name: Sign APK with fixed key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          SRC=build_app/build/app/outputs/flutter-apk/app-release.apk
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::KEYSTORE_BASE64 / KEYSTORE_PASSWORD secret নেই। এই APK আপডেট হিসেবে ইনস্টল হবে না।"
+            cp "$SRC" tech-city.apk
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+          BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BT/apksigner" sign \
+            --ks "$RUNNER_TEMP/keystore.jks" --ks-key-alias techcity \
+            --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEYSTORE_PASSWORD \
+            --out tech-city.apk "$SRC"
+          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs tech-city.apk | head -3
+          rm -f "$RUNNER_TEMP/keystore.jks"
 
       - uses: actions/upload-artifact@v4
         with:
           name: tech-city-apk
-          path: build_app/build/app/outputs/flutter-apk/app-release.apk
+          path: tech-city.apk
+
+      # পাবলিক ডাউনলোড লিংক: https://github.com/<user>/<repo>/releases/latest/download/tech-city.apk
+      - name: Publish release (latest)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest tech-city.apk \
+            --target "${{ github.sha }}" \
+            --title "Tech City (build ${{ github.run_number }})" \
+            --notes "Build ${{ github.run_number }}" --latest

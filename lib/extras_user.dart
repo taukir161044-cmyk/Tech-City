@@ -722,3 +722,140 @@ class _RatingFormState extends State<RatingForm> {
     );
   }
 }
+
+// =========================================================== app update
+
+class UpdateInfo {
+  const UpdateInfo(this.build, this.message, this.url, this.force);
+  final int build;
+  final String message, url;
+  final bool force;
+
+  bool get outdated => build > kBuildNumber;
+
+  factory UpdateInfo.from(Json? m) {
+    final u = asStr(m?['url']).trim();
+    return UpdateInfo(
+      asInt(m?['latestBuild']),
+      asStr(m?['message']),
+      u.isEmpty ? kDefaultApkUrl : u,
+      m?['force'] == true,
+    );
+  }
+}
+
+/// অ্যাডমিন "বাধ্যতামূলক আপডেট" দিলে পুরনো অ্যাপ ব্লক হয়ে যায়
+class UpdateGuard extends StatefulWidget {
+  const UpdateGuard({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<UpdateGuard> createState() => _UpdateGuardState();
+}
+
+class _UpdateGuardState extends State<UpdateGuard> {
+  late final Stream<DocumentSnapshot<Json>> _s =
+      db.collection('settings').doc('app').snapshots();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Json>>(
+      stream: _s,
+      builder: (context, snap) {
+        final info = UpdateInfo.from(snap.data?.data());
+        if (info.outdated && info.force) {
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.system_update,
+                          size: 72, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(height: 16),
+                      const Text('অ্যাপ আপডেট করতে হবে',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text(
+                          info.message.isEmpty
+                              ? 'চালিয়ে যেতে নতুন ভার্সন ডাউনলোড করে ইনস্টল করুন।'
+                              : info.message,
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: () => launchLink(context, info.url),
+                        icon: const Icon(Icons.download),
+                        label: const Text('নতুন ভার্সন ডাউনলোড'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        return widget.child;
+      },
+    );
+  }
+}
+
+class UpdateCard extends StatefulWidget {
+  const UpdateCard({super.key});
+
+  @override
+  State<UpdateCard> createState() => _UpdateCardState();
+}
+
+class _UpdateCardState extends State<UpdateCard> {
+  late final Stream<DocumentSnapshot<Json>> _s =
+      db.collection('settings').doc('app').snapshots();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Json>>(
+      stream: _s,
+      builder: (context, snap) {
+        final info = UpdateInfo.from(snap.data?.data());
+        if (!info.outdated) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.system_update, color: Colors.blue.shade800),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('নতুন আপডেট এসেছে',
+                        style: TextStyle(
+                            color: Colors.black87, fontWeight: FontWeight.bold)),
+                    if (info.message.isNotEmpty)
+                      Text(info.message,
+                          style: const TextStyle(color: Colors.black87)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => launchLink(context, info.url),
+                child: const Text('আপডেট'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
